@@ -1,3 +1,5 @@
+import pandas as pd
+import pyodbc
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from werkzeug.utils import secure_filename
 import os
@@ -10,9 +12,26 @@ app.config['PROCESSED_FOLDER'] = 'processed'
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['PROCESSED_FOLDER'], exist_ok=True)
 
+# MSSQL configuration
+DB_CONFIG = {
+    'server': '127.0.0.1',
+    'database': 'YOUR_DATABASE',
+    'username': 'label',
+    'password': 'label',
+    'driver': '{ODBC Driver 17 for SQL Server}'
+}
+
+def read_excel_dropdown(sheet_name, column):
+    filepath = 'config.xlsx'
+    df = pd.read_excel(filepath, sheet_name=sheet_name, usecols=[column])
+    return df.iloc[:, 0].dropna().tolist()
+
 @app.route('/')
 def index():
-    return render_template('index.html')
+    vendor_list = read_excel_dropdown(sheet_name="VendorList", column=0)
+    field_list = read_excel_dropdown(sheet_name="FieldList", column=0)
+    return render_template('index.html', vendor_list=vendor_list, field_list=field_list)
+
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
@@ -35,17 +54,19 @@ def upload_file():
         content = barcode.data.decode('utf-8')
         barcode_data.append({
          'content': content,
+         'meaning':'',
          'type': barcode.type,
-         'coordinates': {'x': x, 'y': y},
+         'x': x,
+         'y': y,
          'length': len(content),  # Count the number of characters in the barcode
          'rect': (x, y, w, h)
         })
 
     # Sort barcodes top-to-bottom, left-to-right
-    # barcode_data.sort(key=lambda b: (b['coordinates']['y'], b['coordinates']['x']))
+    barcode_data.sort(key=lambda b: (b['y'], b['x']))
     
-		# Sort barcodes left-to-right, top-to-bottom
-    barcode_data.sort(key=lambda b: (b['coordinates']['x'], b['coordinates']['y']))
+	# Sort barcodes left-to-right, top-to-bottom
+    # barcode_data.sort(key=lambda b: (b['x'], b['y']))
 
     # Annotate the image
     for idx, barcode in enumerate(barcode_data, start=1):
@@ -65,6 +86,29 @@ def upload_file():
 @app.route('/processed/<filename>')
 def processed_file(filename):
     return send_from_directory(app.config['PROCESSED_FOLDER'], filename)
+
+@app.route('/submit', methods=['POST'])
+def submit_data():
+    data = request.json
+    vendor = data.get('vendor')
+    table_data = data.get('tableData')
+
+    # Save data to MSSQL
+    conn = pyodbc.connect(
+        f"DRIVER={DB_CONFIG['driver']};SERVER={DB_CONFIG['server']};DATABASE={DB_CONFIG['database']};"
+        f"UID={DB_CONFIG['username']};PWD={DB_CONFIG['password']}"
+    )
+    cursor = conn.cursor()
+
+    for row in table_data:
+        cursor.execute("""
+            INSERT INTO BarcodeData (Vendor, OrderNumber, Content, Meaning, CoordinatesX, CoordinatesY, Length)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, vendor, row['order'], row['content'], row['meaning'], row['coordinates']['x'], row['coordinates']['y'], row['length'])
+
+    conn.commit()
+    conn.close()
+    return jsonify({'message': 'Data saved successfully'})
 
 if __name__ == '__main__':
     app.run(debug=True)

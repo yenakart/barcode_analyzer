@@ -3,36 +3,48 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Barcode Analyzer</title>
+    <title>Barcode Learner</title>
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
-    <h1>Barcode Analyzer</h1>
+    <h1>Barcode Learner</h1>
+
     <form id="uploadForm" enctype="multipart/form-data">
       <input type="file" id="image" name="image" accept="image/jpeg" required />
     </form>
+
     <div id="result">
-      <h2>Analyzed Barcodes</h2>
+      <h2>Annotate Barcodes</h2>
       <img
         id="annotatedImage"
         alt="Annotated Image"
         style="max-width: 100%; display: none"
       />
+      <label for="vendor">Vendor:</label>
+      <select id="vendor">
+        {% for vendor in vendor_list %}
+        <option value="{{ vendor }}">{{ vendor }}</option>
+        {% endfor %}
+      </select>
       <table id="resultTable" border="1">
         <thead>
           <tr>
             <th>Order</th>
             <th>Content</th>
+            <th>Meaning</th>
             <th>Type</th>
-            <th>Coordinates (X, Y)</th>
+            <th>X</th>
+            <th>Y</th>
             <th>Length</th>
           </tr>
         </thead>
         <tbody></tbody>
       </table>
+      <button id="submitBtn">Submit</button>
     </div>
 
     <script>
+      const fieldList = {{ field_list | tojson }};
       document.getElementById('image').addEventListener('change', async (e) => {
         const formData = new FormData(document.getElementById('uploadForm'));
         const response = await fetch('/upload', {
@@ -47,11 +59,26 @@
         if (result.barcodes && result.barcodes.length > 0) {
           result.barcodes.forEach((barcode) => {
             const row = document.createElement('tr');
+
+            // Order dropdown
+            const orderOptions = Array.from({ length: result.barcodes.length }, (_, i) => i + 1)
+              .map(order => `<option value="${order}" ${order === barcode.order ? 'selected' : ''}>${order}</option>`)
+              .join('');
+
+            // Meaning dropdown
+            const meaningOptions = fieldList.map(field => `<option value="${field}">${field}</option>`).join('');
+
             row.innerHTML = `
-                        <td>${barcode.order}</td>
+                        <td>
+                            <select>${orderOptions}</select>
+                        </td>
                         <td>${barcode.content}</td>
-                        <td>${barcode.type}</td>
-                        <td>${barcode.coordinates.x}, ${barcode.coordinates.y}</td>
+                        <td>
+                            <select>${meaningOptions}</select>
+                        </td>
+                        <td>${barcode.type}
+                        <td>${barcode.x}</td>
+                        <td>${barcode.y}</td>
                         <td>${barcode.length}</td>
                     `;
             tbody.appendChild(row);
@@ -67,6 +94,33 @@
           tbody.appendChild(row);
         }
       });
+
+      document.getElementById('submitBtn').addEventListener('click', async () => {
+            const vendor = document.getElementById('vendor').value;
+            const rows = Array.from(document.querySelectorAll('#resultTable tbody tr'));
+            const tableData = rows.map(row => {
+                const cells = row.querySelectorAll('td');
+                return {
+                    order: cells[0].querySelector('select').value,
+                    content: cells[1].textContent.trim(),
+                    meaning: cells[2].querySelector('select').value,
+                    coordinates: {
+                        x: parseInt(cells[3].textContent.split(',')[0]),
+                        y: parseInt(cells[3].textContent.split(',')[1])
+                    },
+                    length: parseInt(cells[4].textContent.trim())
+                };
+            });
+
+            const response = await fetch('/submit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ vendor, tableData })
+            });
+
+            const result = await response.json();
+            alert(result.message);
+        });
     </script>
   </body>
 </html>
