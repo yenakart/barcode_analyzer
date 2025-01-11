@@ -15,23 +15,23 @@ os.makedirs(app.config['PROCESSED_FOLDER'], exist_ok=True)
 # MSSQL configuration
 DB_CONFIG = {
     'server': '127.0.0.1',
-    'database': 'YOUR_DATABASE',
+    'database': 'LabelAnalysisDB',
     'username': 'label',
     'password': 'label',
     'driver': '{ODBC Driver 17 for SQL Server}'
 }
 
-def read_excel_dropdown(sheet_name, column):
-    filepath = 'config.xlsx'
-    df = pd.read_excel(filepath, sheet_name=sheet_name, usecols=[column])
-    return df.iloc[:, 0].dropna().tolist()
+def read_field_list_from_file(filepath):
+    with open(filepath, 'r') as file:
+        lines = file.readlines()
+    # Remove whitespace and empty lines
+    field_list = [line.strip() for line in lines if line.strip()]
+    return [''] + field_list
 
 @app.route('/')
 def index():
-    vendor_list = read_excel_dropdown(sheet_name="VendorList", column=0)
-    field_list = read_excel_dropdown(sheet_name="FieldList", column=0)
-    return render_template('index.html', vendor_list=vendor_list, field_list=field_list)
-
+    field_list = read_field_list_from_file('MeaningList.txt')
+    return render_template('index.html', field_list=field_list)
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
@@ -64,7 +64,7 @@ def upload_file():
 
     # Sort barcodes top-to-bottom, left-to-right
     barcode_data.sort(key=lambda b: (b['y'], b['x']))
-    
+        
 	# Sort barcodes left-to-right, top-to-bottom
     # barcode_data.sort(key=lambda b: (b['x'], b['y']))
 
@@ -81,6 +81,15 @@ def upload_file():
     for idx, barcode in enumerate(barcode_data, start=1):
         barcode['order'] = idx
 
+    if(barcode_data != []) :
+        x_max = max(b["x"] + b["rect"][2] for b in barcode_data)
+        y_max = max(b["y"] + b["rect"][3] for b in barcode_data)
+        x_min = min(b["x"] for b in barcode_data)
+        y_min = min(b["y"] for b in barcode_data)
+        for b in barcode_data:
+            b["normalized_x"] = (b["x"] - x_min) / (x_max - x_min)
+            b["normalized_y"] = (b["y"] - y_min) / (y_max - y_min)
+
     return jsonify({'barcodes': barcode_data, 'image_url': f'/processed/{filename}'})
 
 @app.route('/processed/<filename>')
@@ -92,6 +101,7 @@ def submit_data():
     data = request.json
     vendor = data.get('vendor')
     table_data = data.get('tableData')
+    qty = data.get('qty')
 
     # Save data to MSSQL
     conn = pyodbc.connect(
@@ -100,11 +110,16 @@ def submit_data():
     )
     cursor = conn.cursor()
 
+    cursor.execute("""
+            INSERT INTO Labels (vendor_name, sap_vendor_name, revision, barcode_count)
+            VALUES (?, ?, ?, ?)
+        """, vendor, "", "1", qty)
+
     for row in table_data:
         cursor.execute("""
-            INSERT INTO BarcodeData (Vendor, OrderNumber, Content, Meaning, CoordinatesX, CoordinatesY, Length)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, vendor, row['order'], row['content'], row['meaning'], row['coordinates']['x'], row['coordinates']['y'], row['length'])
+            INSERT INTO Barcodes (vendor_name, read_order, content, meaning, barcode_type, normalized_x, normalized_y, length)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, vendor, row['read_order'], row['content'], row['meaning'], row['type'], row['x'], row['y'], row['length'])
 
     conn.commit()
     conn.close()

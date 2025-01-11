@@ -1,0 +1,24 @@
+USE LabelAnalysisDB;
+
+-- Create the Labels table
+CREATE TABLE Labels (
+    id INT PRIMARY KEY IDENTITY(1,1),
+    vendor_name NVARCHAR(255) NOT NULL,
+    sap_vendor_name NVARCHAR(255),
+    revision INT DEFAULT 1,
+    upload_time DATETIME DEFAULT GETDATE(),
+    barcode_count INT NOT NULL
+);
+
+-- Create the Barcodes table
+CREATE TABLE Barcodes (
+    id INT PRIMARY KEY IDENTITY(1,1),
+    vendor_name NVARCHAR(255) NOT NULL,
+    read_order INT NOT NULL,
+    content NVARCHAR(255) NOT NULL,
+    meaning NVARCHAR(255) NOT NULL,
+    barcode_type NVARCHAR(50),
+    normalized_x FLOAT NOT NULL,
+    normalized_y FLOAT NOT NULL,
+    length INT NOT NULL,
+);

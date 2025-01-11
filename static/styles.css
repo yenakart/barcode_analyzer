@@ -10,6 +10,16 @@ h1 {
 form {
 	margin-bottom: 20px;
 }
+#annotatedImage {
+	margin: 10px auto; /* Center it horizontally */
+}
+
+#vendor {
+	display: block; /* Make the button a block element */
+	margin: 10px auto; /* Center it horizontally */
+	padding: 10px 20px; /* Add some padding */
+	font-size: 16px; /* Font size */
+}
 
 table {
 	width: 100%;
@@ -24,4 +34,11 @@ table th, table td {
 
 table th {
 	background-color: #f4f4f4;
+}
+
+#submitBtn {
+	display: block; /* Make the button a block element */
+	margin: 10px auto; /* Center it horizontally */
+	padding: 10px 20px; /* Add some padding */
+	font-size: 16px; /* Font size */
 }

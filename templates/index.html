@@ -18,14 +18,10 @@
       <img
         id="annotatedImage"
         alt="Annotated Image"
-        style="max-width: 100%; display: none"
+        style="max-width: 80%; display: none"
       />
-      <label for="vendor">Vendor:</label>
-      <select id="vendor">
-        {% for vendor in vendor_list %}
-        <option value="{{ vendor }}">{{ vendor }}</option>
-        {% endfor %}
-      </select>
+      <label for="vendor"></label>
+      <input type="text" id="vendor" placeholder="Enter vendor name" />
       <table id="resultTable" border="1">
         <thead>
           <tr>
@@ -44,83 +40,103 @@
     </div>
 
     <script>
-      const fieldList = {{ field_list | tojson }};
-      document.getElementById('image').addEventListener('change', async (e) => {
-        const formData = new FormData(document.getElementById('uploadForm'));
-        const response = await fetch('/upload', {
-          method: 'POST',
-          body: formData,
-        });
-        const result = await response.json();
+        const fieldList = {{ field_list | tojson }};
+        var result = null;
 
-        // Update table
-        const tbody = document.querySelector('#resultTable tbody');
-        tbody.innerHTML = ''; // Clear previous results
-        if (result.barcodes && result.barcodes.length > 0) {
-          result.barcodes.forEach((barcode) => {
-            const row = document.createElement('tr');
-
-            // Order dropdown
-            const orderOptions = Array.from({ length: result.barcodes.length }, (_, i) => i + 1)
-              .map(order => `<option value="${order}" ${order === barcode.order ? 'selected' : ''}>${order}</option>`)
-              .join('');
-
-            // Meaning dropdown
-            const meaningOptions = fieldList.map(field => `<option value="${field}">${field}</option>`).join('');
-
-            row.innerHTML = `
-                        <td>
-                            <select>${orderOptions}</select>
-                        </td>
-                        <td>${barcode.content}</td>
-                        <td>
-                            <select>${meaningOptions}</select>
-                        </td>
-                        <td>${barcode.type}
-                        <td>${barcode.x}</td>
-                        <td>${barcode.y}</td>
-                        <td>${barcode.length}</td>
-                    `;
-            tbody.appendChild(row);
+        // Action 1 : To upload barcode picture
+        document.getElementById('image').addEventListener('change', async (e) => {
+          const formData = new FormData(document.getElementById('uploadForm'));
+          const response = await fetch('/upload', {
+            method: 'POST',
+            body: formData,
           });
 
-          // Show annotated image
-          const img = document.getElementById('annotatedImage');
-          img.src = result.image_url;
-          img.style.display = 'block';
-        } else {
-          const row = document.createElement('tr');
-          row.innerHTML = '<td colspan="5">No valid barcodes found</td>';
-          tbody.appendChild(row);
-        }
-      });
+          // Wait to get label data back from the server
+          result = await response.json();
 
-      document.getElementById('submitBtn').addEventListener('click', async () => {
-            const vendor = document.getElementById('vendor').value;
-            const rows = Array.from(document.querySelectorAll('#resultTable tbody tr'));
-            const tableData = rows.map(row => {
-                const cells = row.querySelectorAll('td');
-                return {
-                    order: cells[0].querySelector('select').value,
-                    content: cells[1].textContent.trim(),
-                    meaning: cells[2].querySelector('select').value,
-                    coordinates: {
-                        x: parseInt(cells[3].textContent.split(',')[0]),
-                        y: parseInt(cells[3].textContent.split(',')[1])
-                    },
-                    length: parseInt(cells[4].textContent.trim())
-                };
+          // Update table
+          const tbody = document.querySelector('#resultTable tbody');
+          tbody.innerHTML = ''; // Clear previous results
+          if (result.barcodes && result.barcodes.length > 0) {
+            result.barcodes.forEach((barcode) => {
+              const row = document.createElement('tr');
+
+              // Order dropdown
+              const orderOptions = Array.from({ length: result.barcodes.length }, (_, i) => i + 1)
+                .map(order => `<option value="${order}" ${order === barcode.order ? 'selected' : ''}>${order}</option>`)
+                .join('');
+
+              // Meaning dropdown
+              const meaningOptions = fieldList.map(field => `<option value="${field}">${field}</option>`).join('');
+
+              row.innerHTML = `
+                          <td>
+                              <select>${orderOptions}</select>
+                          </td>
+                          <td>${barcode.content}</td>
+                          <td>
+                              <select>${meaningOptions}</select>
+                          </td>
+                          <td>${barcode.type}
+                          <td>${(barcode.normalized_x * 100).toFixed(2)}%</td> <!-- Display as percentage -->
+                          <td>${(barcode.normalized_y * 100).toFixed(2)}%</td> <!-- Display as percentage -->
+                          <td>${barcode.length}</td>
+                      `;
+              tbody.appendChild(row);
             });
 
-            const response = await fetch('/submit', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ vendor, tableData })
-            });
+            // Show annotated image
+            const img = document.getElementById('annotatedImage');
+            img.src = result.image_url;
+            img.style.display = 'block';
 
-            const result = await response.json();
-            alert(result.message);
+          // Add event listeners to dropdowns to update `result.barcodes` directly
+          document.querySelectorAll('.order-dropdown').forEach(dropdown => {
+              dropdown.addEventListener('change', (e) => {
+                  const index = e.target.dataset.index;
+                  result.barcodes[index].order = parseInt(e.target.value, 10);
+              });
+          });
+
+          document.querySelectorAll('.meaning-dropdown').forEach(dropdown => {
+              dropdown.addEventListener('change', (e) => {
+                  const index = e.target.dataset.index;
+                  result.barcodes[index].meaning = e.target.value;
+              });
+          });
+
+          } else {
+            const row = document.createElement('tr');
+            row.innerHTML = '<td colspan="5">No valid barcodes found</td>';
+            tbody.appendChild(row);
+          }
         });
+
+        // Action 2 : To confirm and upload table data
+        // No need to explicitly use 'normalized_' because it interest only cell index in the row
+
+        document.getElementById('submitBtn').addEventListener('click', async () => {
+          const vendor = document.getElementById('vendor').value;
+          const tableData = result.barcodes.map(barcode => ({
+              read_order: barcode.order,
+              content: barcode.content,
+              meaning: barcode.meaning || '', // Ensure default value
+              type: barcode.type,
+              x: barcode.normalized_x,
+              y: barcode.normalized_y,
+              length: barcode.length,
+          }));
+          const qty = tableData.length;
+
+          const response = await fetch('/submit', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ vendor, tableData, qty })
+          });
+
+          const db_result = await response.json();
+          alert(db_result.message);
+      });
     </script>
   </body>
 </html>

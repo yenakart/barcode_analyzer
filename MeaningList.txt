@@ -1,0 +1,10 @@
+Vendor
+Part Number/PN
+QTY
+DATECODE
+MPN
+Lot/Lot Code/Lot No
+COO
+ITEM
+N/A
+QR

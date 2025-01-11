@@ -2,4 +2,4 @@ Flask
 opencv-python
 pyzbar
 pyodbc
-pandas
+flask-sqlalchemy
