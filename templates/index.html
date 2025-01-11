@@ -10,16 +10,22 @@
     <h1>Barcode Analyzer</h1>
     <form id="uploadForm" enctype="multipart/form-data">
       <input type="file" id="image" name="image" accept="image/jpeg" required />
-      <button type="submit">Upload and Analyze</button>
     </form>
     <div id="result">
       <h2>Analyzed Barcodes</h2>
+      <img
+        id="annotatedImage"
+        alt="Annotated Image"
+        style="max-width: 100%; display: none"
+      />
       <table id="resultTable" border="1">
         <thead>
           <tr>
+            <th>Order</th>
             <th>Content</th>
             <th>Type</th>
             <th>Coordinates (X, Y)</th>
+            <th>Length</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -27,35 +33,40 @@
     </div>
 
     <script>
-      document
-        .getElementById('uploadForm')
-        .addEventListener('submit', async (e) => {
-          e.preventDefault();
-          const formData = new FormData(e.target);
-          const response = await fetch('/upload', {
-            method: 'POST',
-            body: formData,
-          });
-          const result = await response.json();
+      document.getElementById('image').addEventListener('change', async (e) => {
+        const formData = new FormData(document.getElementById('uploadForm'));
+        const response = await fetch('/upload', {
+          method: 'POST',
+          body: formData,
+        });
+        const result = await response.json();
 
-          const tbody = document.querySelector('#resultTable tbody');
-          tbody.innerHTML = ''; // Clear previous results
-          if (result.barcodes && result.barcodes.length > 0) {
-            result.barcodes.forEach((barcode) => {
-              const row = document.createElement('tr');
-              row.innerHTML = `
+        // Update table
+        const tbody = document.querySelector('#resultTable tbody');
+        tbody.innerHTML = ''; // Clear previous results
+        if (result.barcodes && result.barcodes.length > 0) {
+          result.barcodes.forEach((barcode) => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                        <td>${barcode.order}</td>
                         <td>${barcode.content}</td>
                         <td>${barcode.type}</td>
                         <td>${barcode.coordinates.x}, ${barcode.coordinates.y}</td>
+                        <td>${barcode.length}</td>
                     `;
-              tbody.appendChild(row);
-            });
-          } else {
-            const row = document.createElement('tr');
-            row.innerHTML = '<td colspan="3">No valid barcodes found</td>';
             tbody.appendChild(row);
-          }
-        });
+          });
+
+          // Show annotated image
+          const img = document.getElementById('annotatedImage');
+          img.src = result.image_url;
+          img.style.display = 'block';
+        } else {
+          const row = document.createElement('tr');
+          row.innerHTML = '<td colspan="5">No valid barcodes found</td>';
+          tbody.appendChild(row);
+        }
+      });
     </script>
   </body>
 </html>
