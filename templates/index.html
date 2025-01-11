@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Barcode Analyzer</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <h1>Barcode Analyzer</h1>
+    <form id="uploadForm" enctype="multipart/form-data">
+      <input type="file" id="image" name="image" accept="image/jpeg" required />
+      <button type="submit">Upload and Analyze</button>
+    </form>
+    <div id="result">
+      <h2>Analyzed Barcodes</h2>
+      <table id="resultTable" border="1">
+        <thead>
+          <tr>
+            <th>Content</th>
+            <th>Type</th>
+            <th>Coordinates (X, Y)</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <script>
+      document
+        .getElementById('uploadForm')
+        .addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const formData = new FormData(e.target);
+          const response = await fetch('/upload', {
+            method: 'POST',
+            body: formData,
+          });
+          const result = await response.json();
+
+          const tbody = document.querySelector('#resultTable tbody');
+          tbody.innerHTML = ''; // Clear previous results
+          if (result.barcodes && result.barcodes.length > 0) {
+            result.barcodes.forEach((barcode) => {
+              const row = document.createElement('tr');
+              row.innerHTML = `
+                        <td>${barcode.content}</td>
+                        <td>${barcode.type}</td>
+                        <td>${barcode.coordinates.x}, ${barcode.coordinates.y}</td>
+                    `;
+              tbody.appendChild(row);
+            });
+          } else {
+            const row = document.createElement('tr');
+            row.innerHTML = '<td colspan="3">No valid barcodes found</td>';
+            tbody.appendChild(row);
+          }
+        });
+    </script>
+  </body>
+</html>
